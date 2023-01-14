@@ -1,0 +1,34 @@
+version: '3.9'
+services:
+    redis:
+        image: docker.io/redis
+        volumes:
+            - cache_data:/data
+        healthcheck:
+            test: 'redis-cli ping'
+            start_period: 5s
+            interval: 1s
+            timeout: 1s
+    twitter-bot:
+        image: twitter-collection-bot:latest
+        init: true
+        build:
+            context: .
+            dockerfile: Containerfile
+        depends_on:
+            redis:
+                condition: service_healthy
+        environment:
+            - REDIS_URL=redis://redis:6379
+            - COLLECTION_PATH=/data/collection.db
+            - IMAGE_DIR_PATH=/data/images/collection
+
+            # Passed through from parent
+            - TWITTER_CONSUMER_KEY
+            - TWITTER_CONSUMER_SECRET
+            - TWITTER_ACCESS_KEY
+            - TWITTER_ACCESS_SECRET
+        volumes:
+            - ./data:/data:ro
+volumes:
+    cache_data:
