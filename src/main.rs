@@ -1,4 +1,5 @@
 use futures::future::try_join_all;
+use mime_sniffer::MimeTypeSniffer;
 use std::error::Error;
 use tokio::time::{sleep, Duration};
 
@@ -18,9 +19,24 @@ async fn run_tweet_iteration(
         next_tweet
             .file_names
             .iter()
-            .map(|name| async { images::get_image_file(name).await }),
+            .map(|name| images::get_image_file(name)),
     )
     .await?;
+
+    let mimes = files
+        .iter()
+        .map(|data| {
+            data.sniff_mime_type()
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(mime::IMAGE_JPEG)
+        })
+        .collect::<Vec<_>>();
+
+    let medias = mimes
+        .iter()
+        .zip(files.iter())
+        .map(|(a, b)| (a, b.as_slice()))
+        .collect::<Vec<_>>();
 
     let date = collection::get_new_date_for_tweet(&next_tweet)?;
 
@@ -40,7 +56,9 @@ async fn run_tweet_iteration(
     };
 
     println!("Publishing tweet {}...", next_tweet.id);
-    twitter::publish_tweet(next_tweet, &files, tw_token).await?;
+
+    let media_ids = twitter::upload_media(&medias, tw_token).await?;
+    twitter::publish_tweet(next_tweet, &media_ids, tw_token).await?;
 
     Ok(())
 }

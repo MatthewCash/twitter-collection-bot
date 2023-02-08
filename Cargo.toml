@@ -6,11 +6,12 @@ edition = "2021"
 [dependencies]
 rusqlite = { version = "0.28.0", features = ["bundled"] }
 futures = "0.3.25"
-egg-mode = "0.16.0"
+egg-mode = { git = "https://github.com/MatthewCash/egg-mode", rev = "00194913fbbc5b206a5c2d6db1a3313a8cf4e3b4" }
 mime = "0.3.16"
 tokio = { version = "1.24.1", features = ["full"] }
 redis = "0.22.2"
 time = { version = "0.3.17", features = ["macros"] }
+mime-sniffer = "0.1.2"
 
 [[bin]]
 name = "app"

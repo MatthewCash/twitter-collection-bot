@@ -1,8 +1,10 @@
-use crate::collection::CollectionTweet;
-use egg_mode::media::upload_media;
-use egg_mode::{KeyPair, Token};
+use std::error::Error;
 
 use egg_mode::tweet::DraftTweet;
+use egg_mode::{KeyPair, Token};
+use futures::future::try_join_all;
+
+use crate::collection::CollectionTweet;
 
 pub fn create_token() -> Result<Token, std::env::VarError> {
     Ok(Token::Access {
@@ -17,24 +19,25 @@ pub fn create_token() -> Result<Token, std::env::VarError> {
     })
 }
 
+pub async fn upload_media(
+    medias: &[(&mime::Mime, &[u8])],
+    token: &Token,
+) -> Result<Vec<u64>, Box<dyn Error>> {
+    try_join_all(medias.iter().map(|(mime, data)| async {
+        let id_str = egg_mode::media::upload_media(data, mime, token).await?.id.0;
+        Ok(id_str.parse()?)
+    }))
+    .await
+}
+
 pub async fn publish_tweet(
     collection_tweet: CollectionTweet,
-    files: &[Vec<u8>],
+    media_ids: &[u64],
     token: &Token,
 ) -> Result<(), egg_mode::error::Error> {
-    let media_ids = futures::future::try_join_all(
-        files
-            .iter()
-            .map(|file| async { upload_media(file, &mime::IMAGE_JPEG, token).await }),
-    )
-    .await?
-    .iter()
-    .map(|handle| handle.id.to_owned())
-    .collect::<Vec<_>>();
-
-    let split_tweet =
+    let should_split_tweet =
         collection_tweet.text.len() + collection_tweet.translated_text.len() + 2 > 280;
-    let content = if split_tweet {
+    let content = if should_split_tweet {
         collection_tweet.text
     } else {
         format!(
@@ -46,10 +49,10 @@ pub async fn publish_tweet(
     let mut tweet_draft = DraftTweet::new(content);
     media_ids
         .iter()
-        .for_each(|id| tweet_draft.add_media(id.to_owned()));
+        .for_each(|id| tweet_draft.add_media(id.to_string().into()));
     let tweet = tweet_draft.send(token).await?;
 
-    if split_tweet {
+    if should_split_tweet {
         DraftTweet::new(collection_tweet.translated_text)
             .in_reply_to(tweet.id)
             .send(token)
