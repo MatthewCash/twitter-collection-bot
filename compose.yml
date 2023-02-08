@@ -3,7 +3,7 @@ services:
     redis:
         image: docker.io/redis
         volumes:
-            - cache_data:/data
+            - redis_data:/data
         healthcheck:
             test: 'redis-cli ping'
             start_period: 5s
@@ -31,4 +31,4 @@ services:
         volumes:
             - ./data:/data:ro
 volumes:
-    cache_data:
+    redis_data:
