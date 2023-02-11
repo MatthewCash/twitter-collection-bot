@@ -2,15 +2,17 @@ use futures::future::try_join_all;
 use mime_sniffer::MimeTypeSniffer;
 use std::error::Error;
 use tokio::time::{sleep, Duration};
+use twitter::{create_dev_token, create_user_token, TwitterAuth};
 
 mod collection;
 mod images;
 mod redis;
 mod twitter;
+mod twitter_api;
 
 async fn run_tweet_iteration(
     db_conn: &rusqlite::Connection,
-    tw_token: &egg_mode::Token,
+    tw_auth: &TwitterAuth,
     tweet_index: usize,
 ) -> Result<(), Box<dyn Error>> {
     let next_tweet = collection::get_tweet_from_index(db_conn, tweet_index)?;
@@ -67,14 +69,19 @@ async fn run_tweet_iteration(
 async fn main() {
     let db_conn = collection::load_collection().expect("Failed to load collection!");
     let mut redis_conn = redis::connect().expect("Failed to connect to redis!");
-    let tw_token = twitter::create_token().expect("Failed to create twitter token!");
     let tweet_count = collection::get_tweet_count(&db_conn).expect("Failed to get tweet count!");
+
+    let tw_auth = if std::env::var("TWITTER_USE_USER").is_ok() {
+        TwitterAuth::User(create_user_token().expect("Failed to create twitter user token!"))
+    } else {
+        TwitterAuth::Dev(create_dev_token().expect("Failed to create twitter dev token!"))
+    };
 
     loop {
         let i = redis::get_next_index(&mut redis_conn, tweet_count)
             .expect("Failed to get next tweet index!");
 
-        match run_tweet_iteration(&db_conn, &tw_token, i).await {
+        match run_tweet_iteration(&db_conn, &tw_auth, i).await {
             Ok(_) => {
                 redis::save_tweet_index(&mut redis_conn, i).expect("Failed to save tweet index!")
             }
