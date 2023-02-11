@@ -1,6 +1,7 @@
 use rusqlite::{Connection, Result};
 use std::error::Error;
-use time::{error::ComponentRange, macros::time, Duration, OffsetDateTime};
+use time::{error::ComponentRange, macros::time, OffsetDateTime};
+use tokio::time::Duration;
 
 pub struct CollectionTweet {
     pub id: u64,
@@ -56,29 +57,19 @@ pub fn get_new_date_for_tweet(tweet: &CollectionTweet) -> Result<OffsetDateTime,
     let new_year = tweet.date.year() + 3;
 
     match tweet.date.replace_year(new_year) {
-        Ok(date) => Ok(date),
-        Err(why) => {
-            if why.name() == "day" && tweet.date.day() == 29 {
-                // If original day is 2/29 (leap year) set to end of 2/28
-                tweet
-                    .date
-                    .replace_time(time!(23:59:59))
-                    .replace_day(28)?
-                    .replace_year(new_year)
-            } else {
-                Err(why)
-            }
-        }
+        // If original day is 2/29 (leap year) set to end of 2/28
+        Err(why) if why.name() == "day" && tweet.date.day() == 29 => tweet
+            .date
+            .replace_time(time!(23:59:59))
+            .replace_day(28)?
+            .replace_year(new_year),
+        date => date,
     }
 }
 
-pub fn get_duration_until_tweet(date: OffsetDateTime) -> Result<Option<Duration>, ComponentRange> {
-    let duration = date - OffsetDateTime::now_utc();
-
-    if duration.is_positive() {
-        Ok(Some(duration))
-    } else {
-        // Return none if date is in the past
-        Ok(None)
+pub fn get_duration_until_tweet(date: OffsetDateTime) -> Duration {
+    match date - OffsetDateTime::now_utc() {
+        duration if duration.is_positive() => duration.unsigned_abs(),
+        _ => Duration::ZERO,
     }
 }

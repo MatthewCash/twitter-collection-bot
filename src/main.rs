@@ -10,6 +10,8 @@ mod redis;
 mod twitter;
 mod twitter_api;
 
+static MEDIA_UPLOAD_SECS: u64 = 60;
+
 async fn run_tweet_iteration(
     db_conn: &rusqlite::Connection,
     tw_auth: &TwitterAuth,
@@ -42,25 +44,34 @@ async fn run_tweet_iteration(
 
     let date = collection::get_new_date_for_tweet(&next_tweet)?;
 
-    match collection::get_duration_until_tweet(date)? {
-        Some(duration) => {
+    match collection::get_duration_until_tweet(date) {
+        duration if !duration.is_zero() => {
             println!(
-                "Next tweet scheduled for {}, waiting for {}...",
-                date, duration
+                "Next tweet scheduled for {}, waiting for {:.2}h",
+                date,
+                duration.as_secs() as f64 / 3600.0
             );
-            sleep(duration.unsigned_abs()).await;
+
+            sleep(duration - Duration::from_secs(MEDIA_UPLOAD_SECS)).await;
         }
-        None => {
+        _ => {
             // Immediately publish if no date provided (it is overdue)
             println!("Publishing missed tweet for {} in 5s...", date);
             sleep(Duration::from_secs(5)).await;
         }
     };
 
-    println!("Publishing tweet {}...", next_tweet.id);
+    println!(
+        "Uploading {} medias for tweet {}...",
+        medias.len(),
+        next_tweet.id
+    );
+    let media_ids = twitter::upload_media(&medias, tw_auth).await?;
 
-    let media_ids = twitter::upload_media(&medias, tw_token).await?;
-    twitter::publish_tweet(next_tweet, &media_ids, tw_token).await?;
+    sleep(collection::get_duration_until_tweet(date)).await;
+
+    println!("Publishing tweet {}...", next_tweet.id);
+    twitter::publish_tweet(next_tweet, &media_ids, tw_auth).await?;
 
     Ok(())
 }
