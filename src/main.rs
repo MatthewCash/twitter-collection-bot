@@ -13,6 +13,7 @@ mod twitter_api;
 static MEDIA_UPLOAD_SECS: u64 = 60;
 
 async fn run_tweet_iteration(
+    redis_conn: &mut ::redis::Connection,
     db_conn: &rusqlite::Connection,
     tw_auth: &TwitterAuth,
     tweet_index: usize,
@@ -42,7 +43,7 @@ async fn run_tweet_iteration(
         .map(|(a, b)| (a, b.as_slice()))
         .collect::<Vec<_>>();
 
-    let date = collection::get_new_date_for_tweet(&next_tweet)?;
+    let date = collection::get_new_date_for_tweet(redis_conn, &next_tweet)?;
 
     match collection::get_duration_until_tweet(date) {
         duration if !duration.is_zero() => {
@@ -55,7 +56,7 @@ async fn run_tweet_iteration(
             sleep(duration - Duration::from_secs(MEDIA_UPLOAD_SECS)).await;
         }
         _ => {
-            // Immediately publish if no date provided (it is overdue)
+            // Immediately publish if duration is zero (it is overdue)
             println!("Publishing missed tweet for {} in 5s...", date);
             sleep(Duration::from_secs(5)).await;
         }
@@ -92,11 +93,11 @@ async fn main() {
         let i = redis::get_next_index(&mut redis_conn, tweet_count)
             .expect("Failed to get next tweet index!");
 
-        match run_tweet_iteration(&db_conn, &tw_auth, i).await {
+        match run_tweet_iteration(&mut redis_conn, &db_conn, &tw_auth, i).await {
             Ok(_) => {
                 redis::save_tweet_index(&mut redis_conn, i).expect("Failed to save tweet index!")
             }
-            Err(why) => println!("Tweet loop failed for index {}: {}", i, &why),
+            Err(why) => println!("Tweet loop failed for index {}: {}", i, why),
         }
     }
 }
