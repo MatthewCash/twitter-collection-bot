@@ -24,11 +24,11 @@ pub fn get_tweet_from_index(
     let mut stmt = conn.prepare("SELECT * FROM tweets WHERE rowid = (?) LIMIT 1")?;
     let items = stmt.query_row([index], |row| {
         Ok((
-            row.get::<usize, u64>(0)?,
-            row.get::<usize, String>(1)?,
-            row.get::<usize, String>(2)?,
-            row.get::<usize, String>(3)?,
-            row.get::<usize, i64>(4)?,
+            row.get::<&str, u64>("id")?,
+            row.get::<&str, String>("file_names")?,
+            row.get::<&str, String>("text")?,
+            row.get::<&str, String>("translated_text")?,
+            row.get::<&str, i64>("date")?,
         ))
     })?;
 

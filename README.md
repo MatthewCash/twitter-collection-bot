@@ -4,15 +4,19 @@ A twitter bot for continuously posting a collection of media at exact timestamps
 
 ## Collection
 
-The collection should be an sqlite3 database with *only* the following rows in order
+### Database
 
-| Purpose | Type | Notes |
-| ------- | ---- | ----- |
-| Tweet ID | `u64` | |
-| File Names | `String` | comma-separated |
-| Tweet Text Content | `String` | |
-| Tweet Translated Text | `String` | |
-| Tweet Date | `u64` | unix timestamp |
+The collection should be an sqlite3 database with the following rows
+
+| Column Name | Purpose | Type | Notes |
+| ----------- | ------- | ---- | ----- |
+| `id` |Tweet ID | `u64` | |
+| `file_names` | Media File Names | `String` | comma-separated |
+| `text` | Tweet Text Content | `String` | |
+| `translated_text` | Tweet Translated Text | `String` | |
+| `date` | Tweet Date | `u64` | unix timestamp |
+
+### Environment
 
 Set `COLLECTION_PATH` to the path of the sqlite3 database
 
