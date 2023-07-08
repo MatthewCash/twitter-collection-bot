@@ -53,7 +53,12 @@ async fn run_tweet_iteration(
                 duration.as_secs() as f64 / 3600.0
             );
 
-            sleep(duration - Duration::from_secs(MEDIA_UPLOAD_SECS)).await;
+            sleep(
+                duration
+                    .checked_sub(Duration::from_secs(MEDIA_UPLOAD_SECS))
+                    .unwrap_or(Duration::ZERO),
+            )
+            .await;
         }
         _ => {
             // Immediately publish if duration is zero (it is overdue)
@@ -72,9 +77,7 @@ async fn run_tweet_iteration(
     sleep(collection::get_duration_until_tweet(date)).await;
 
     println!("Publishing tweet {}...", next_tweet.id);
-    twitter::publish_tweet(next_tweet, &media_ids, tw_auth).await?;
-
-    Ok(())
+    twitter::publish_tweet(next_tweet, &media_ids, tw_auth).await
 }
 
 #[tokio::main]
