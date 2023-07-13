@@ -1,5 +1,5 @@
 use redis::RedisError;
-use rusqlite::Result;
+use rusqlite::{named_params, Error::QueryReturnedNoRows, Result, Row};
 use std::error::Error;
 use time::{macros::time, OffsetDateTime};
 use tokio::time::Duration;
@@ -17,36 +17,34 @@ pub fn load_collection() -> Result<rusqlite::Connection, rusqlite::Error> {
     rusqlite::Connection::open(db_path)
 }
 
+fn convert_row_to_tweet(row: &Row) -> Result<CollectionTweet, Box<dyn Error>> {
+    let file_names = row
+        .get::<&str, String>("file_names")?
+        .split(',')
+        .map(|x| x.into())
+        .collect::<Vec<_>>();
+
+    let date = OffsetDateTime::from_unix_timestamp(row.get::<&str, i64>("date")?)?;
+
+    Ok(CollectionTweet {
+        id: row.get::<&str, u64>("id")?,
+        file_names,
+        text: row.get::<&str, String>("text")?,
+        translated_text: row.get::<&str, String>("translated_text")?,
+        date,
+    })
+}
+
 pub fn get_tweet_from_index(
     conn: &rusqlite::Connection,
     index: usize,
 ) -> Result<CollectionTweet, Box<dyn Error>> {
-    let mut stmt = conn.prepare("SELECT * FROM tweets WHERE rowid = (?) LIMIT 1")?;
-    let items = stmt.query_row([index], |row| {
-        Ok((
-            row.get::<&str, u64>("id")?,
-            row.get::<&str, String>("file_names")?,
-            row.get::<&str, String>("text")?,
-            row.get::<&str, String>("translated_text")?,
-            row.get::<&str, i64>("date")?,
-        ))
-    })?;
+    let mut stmt = conn.prepare("SELECT * FROM tweets WHERE rowid = (:index) LIMIT 1")?;
 
-    let file_names = items
-        .1
-        .split(',')
-        .map(|x| x.to_string())
-        .collect::<Vec<_>>();
+    let mut rows = stmt.query(named_params! { ":index": index, })?;
+    let row = rows.next()?.ok_or(QueryReturnedNoRows)?;
 
-    let date = OffsetDateTime::from_unix_timestamp(items.4)?;
-
-    Ok(CollectionTweet {
-        id: items.0,
-        file_names,
-        text: items.2,
-        translated_text: items.3,
-        date,
-    })
+    convert_row_to_tweet(row)
 }
 
 pub fn get_tweet_count(conn: &rusqlite::Connection) -> Result<usize, rusqlite::Error> {
