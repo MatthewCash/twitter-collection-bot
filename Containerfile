@@ -1,4 +1,4 @@
-FROM rust:1.66 AS chef
+FROM docker.io/rust:1.66 AS chef
 
 RUN cargo install cargo-chef --version 0.1.51
 
