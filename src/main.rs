@@ -100,7 +100,7 @@ async fn main() {
             Ok(_) => {
                 redis::save_tweet_index(&mut redis_conn, i).expect("Failed to save tweet index!")
             }
-            Err(why) => println!("Tweet loop failed for index {}: {}", i, why),
+            Err(why) => eprintln!("Tweet loop failed for index {}: {}", i, why),
         }
     }
 }
