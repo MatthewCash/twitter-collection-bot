@@ -28,6 +28,8 @@ services:
             - TWITTER_CONSUMER_SECRET
             - TWITTER_ACCESS_KEY
             - TWITTER_ACCESS_SECRET
+            - TWITTER_USER_TOKEN
+            - TWITTER_USER_AUTH_TOKEN
         volumes:
             - ./data:/data:ro
 volumes:
