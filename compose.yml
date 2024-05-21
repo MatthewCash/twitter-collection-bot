@@ -1,11 +1,11 @@
 version: '3.9'
 services:
-    redis:
-        image: docker.io/redis
+    valkey:
+        image: docker.io/valkey/valkey
         volumes:
             - redis_data:/data
         healthcheck:
-            test: 'redis-cli ping'
+            test: 'valkey-cli ping'
             start_period: 5s
             interval: 1s
             timeout: 1s
@@ -16,10 +16,10 @@ services:
             context: .
             dockerfile: Containerfile
         depends_on:
-            redis:
+            valkey:
                 condition: service_healthy
         environment:
-            - REDIS_URL=redis://redis:6379
+            - REDIS_URL=redis://valkey:6379
             - COLLECTION_PATH=/data/collection.db
             - IMAGE_DIR_PATH=/data/images/collection
 
