@@ -8,7 +8,7 @@ rusqlite = { version = "0.31.0", features = ["bundled"] }
 futures = "0.3.30"
 egg-mode = { git = "https://github.com/MatthewCash/egg-mode", rev = "00194913fbbc5b206a5c2d6db1a3313a8cf4e3b4" }
 mime = "0.3.17"
-tokio = { version = "1.36.0", features = ["full"] }
+tokio = { version = "1.38.2", features = ["full"] }
 redis = "0.24.0"
 time = { version = "0.3.34", features = ["macros"] }
 reqwest = { version = "0.11.24", features = ["multipart", "json"] }
