@@ -1,6 +1,6 @@
+use anyhow::{bail, Result};
 use reqwest::{header::HeaderMap, multipart, Client, ClientBuilder};
 use serde_json::{json, Value};
-use std::error::Error;
 use tokio::time::{sleep, Duration};
 
 pub struct Token {
@@ -8,7 +8,7 @@ pub struct Token {
     pub auth_token: String,
 }
 
-fn get_client(auth: &Token) -> Result<Client, Box<dyn Error>> {
+fn get_client(auth: &Token) -> Result<Client> {
     let mut headers = HeaderMap::new();
     headers.insert(
         "User-Agent",
@@ -39,7 +39,7 @@ pub async fn send_tweet(
     text: impl Into<String>,
     media_ids: Option<&[u64]>,
     reply_to: Option<u64>,
-) -> Result<u64, Box<dyn Error>> {
+) -> Result<u64> {
     let media_entities = match media_ids {
         Some(media_ids) => media_ids
             .iter()
@@ -104,15 +104,11 @@ pub async fn send_tweet(
 
     match &res_json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"] {
         Value::String(id) => Ok(id.parse::<u64>()?),
-        _ => Err("Could not determine tweet id!".into()),
+        _ => bail!("Could not determine tweet id!"),
     }
 }
 
-pub async fn upload_image(
-    token: &Token,
-    data: &[u8],
-    mime: &mime::Mime,
-) -> Result<u64, Box<dyn Error>> {
+pub async fn upload_image(token: &Token, data: &[u8], mime: &mime::Mime) -> Result<u64> {
     let client = get_client(token)?;
     let media_category = match (mime.type_(), mime.subtype()) {
         (mime::IMAGE, mime::GIF) => "tweet_gif",
@@ -135,10 +131,12 @@ pub async fn upload_image(
 
     let res_json = res.json::<Value>().await?;
 
-    let media_id: u64 = res_json["media_id_string"]
+    let Some(media_id) = res_json["media_id_string"]
         .as_str()
-        .and_then(|x| x.parse().ok())
-        .ok_or("Could not determine media id!")?;
+        .and_then(|x| x.parse::<u64>().ok())
+    else {
+        bail!("Could not determine media id!");
+    };
 
     for (i, chunk) in data.chunks(1024 * 1024).enumerate() {
         let query = vec![

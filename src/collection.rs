@@ -1,8 +1,11 @@
-use redis::RedisError;
-use rusqlite::{named_params, Error::QueryReturnedNoRows, Result, Row};
-use std::error::Error;
+use std::env;
+
+use anyhow::Result;
+use rusqlite::{named_params, Connection, Error::QueryReturnedNoRows, Row};
 use time::{macros::time, OffsetDateTime};
 use tokio::time::Duration;
+
+use crate::state::get_year_index;
 
 pub struct CollectionTweet {
     pub id: u64,
@@ -12,12 +15,12 @@ pub struct CollectionTweet {
     date: OffsetDateTime,
 }
 
-pub fn load_collection() -> Result<rusqlite::Connection, rusqlite::Error> {
-    let db_path = std::env::var("COLLECTION_PATH").unwrap_or_else(|_| "./collection.db".into());
-    rusqlite::Connection::open(db_path)
+pub fn load_collection() -> Result<Connection> {
+    let db_path = env::var("DB_PATH").unwrap_or_else(|_| "./db.sqlite".into());
+    Ok(rusqlite::Connection::open(db_path)?)
 }
 
-fn convert_row_to_tweet(row: &Row) -> Result<CollectionTweet, Box<dyn Error>> {
+fn convert_row_to_tweet(row: &Row) -> Result<CollectionTweet> {
     let file_names = row
         .get::<&str, String>("file_names")?
         .split(',')
@@ -35,10 +38,7 @@ fn convert_row_to_tweet(row: &Row) -> Result<CollectionTweet, Box<dyn Error>> {
     })
 }
 
-pub fn get_tweet_from_index(
-    conn: &rusqlite::Connection,
-    index: usize,
-) -> Result<CollectionTweet, Box<dyn Error>> {
+pub fn get_tweet_from_index(conn: &Connection, index: usize) -> Result<CollectionTweet> {
     let mut stmt = conn.prepare("SELECT * FROM tweets WHERE rowid = (:index) LIMIT 1")?;
 
     let mut rows = stmt.query(named_params! { ":index": index, })?;
@@ -47,15 +47,15 @@ pub fn get_tweet_from_index(
     convert_row_to_tweet(row)
 }
 
-pub fn get_tweet_count(conn: &rusqlite::Connection) -> Result<usize, rusqlite::Error> {
+pub fn get_tweet_count(conn: &Connection) -> Result<usize> {
     let mut stmt = conn.prepare("SELECT COUNT(*) FROM tweets")?;
-    stmt.query_row([], |row| row.get(0))
+    Ok(stmt.query_row([], |row| row.get(0))?)
 }
 
-fn get_year_offset_for_tweet(redis_conn: &mut redis::Connection) -> Result<i32, RedisError> {
-    crate::redis::get_year_index(redis_conn).map(|year_index| {
+fn get_year_offset_for_tweet(conn: &Connection) -> Result<usize> {
+    get_year_index(conn).map(|year_index| {
         year_index
-            * std::env::var("COLLECTION_DURATION_YEARS")
+            * env::var("COLLECTION_DURATION_YEARS")
                 .ok()
                 .and_then(|x| x.parse().ok())
                 .unwrap_or(3)
@@ -63,10 +63,10 @@ fn get_year_offset_for_tweet(redis_conn: &mut redis::Connection) -> Result<i32, 
 }
 
 pub fn get_new_date_for_tweet(
-    redis_conn: &mut redis::Connection,
+    conn: &Connection,
     tweet: &CollectionTweet,
-) -> Result<OffsetDateTime, Box<dyn Error>> {
-    let new_year = tweet.date.year() + get_year_offset_for_tweet(redis_conn)?;
+) -> Result<OffsetDateTime> {
+    let new_year = tweet.date.year() + get_year_offset_for_tweet(conn)? as i32;
 
     Ok(match tweet.date.replace_year(new_year) {
         // If original day is 2/29 (leap day on non leap year) set to end of 2/28

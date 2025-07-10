@@ -1,6 +1,7 @@
+use anyhow::Result;
 use egg_mode::KeyPair;
 use futures::future::try_join_all;
-use std::error::Error;
+use std::env;
 use twitter_v2::authorization::Oauth1aToken;
 use twitter_v2::TwitterApi;
 
@@ -17,38 +18,35 @@ pub enum TwitterAuth {
     User(twitter_api::Token),
 }
 
-pub fn create_dev_token() -> Result<DevAuth, std::env::VarError> {
+pub fn create_dev_token() -> Result<DevAuth> {
     Ok(DevAuth {
         v1: egg_mode::Token::Access {
             consumer: KeyPair::new(
-                std::env::var("TWITTER_CONSUMER_KEY")?,
-                std::env::var("TWITTER_CONSUMER_SECRET")?,
+                env::var("TWITTER_CONSUMER_KEY")?,
+                env::var("TWITTER_CONSUMER_SECRET")?,
             ),
             access: KeyPair::new(
-                std::env::var("TWITTER_ACCESS_KEY")?,
-                std::env::var("TWITTER_ACCESS_SECRET")?,
+                env::var("TWITTER_ACCESS_KEY")?,
+                env::var("TWITTER_ACCESS_SECRET")?,
             ),
         },
         v2: Oauth1aToken::new(
-            std::env::var("TWITTER_CONSUMER_KEY")?,
-            std::env::var("TWITTER_CONSUMER_SECRET")?,
-            std::env::var("TWITTER_ACCESS_KEY")?,
-            std::env::var("TWITTER_ACCESS_SECRET")?,
+            env::var("TWITTER_CONSUMER_KEY")?,
+            env::var("TWITTER_CONSUMER_SECRET")?,
+            env::var("TWITTER_ACCESS_KEY")?,
+            env::var("TWITTER_ACCESS_SECRET")?,
         ),
     })
 }
 
-pub fn create_user_token() -> Result<twitter_api::Token, std::env::VarError> {
+pub fn create_user_token() -> Result<twitter_api::Token> {
     Ok(twitter_api::Token {
-        token: std::env::var("TWITTER_USER_TOKEN")?,
-        auth_token: std::env::var("TWITTER_USER_AUTH_TOKEN")?,
+        token: env::var("TWITTER_USER_TOKEN")?,
+        auth_token: env::var("TWITTER_USER_AUTH_TOKEN")?,
     })
 }
 
-pub async fn upload_media(
-    medias: &[(&mime::Mime, &[u8])],
-    auth: &TwitterAuth,
-) -> Result<Vec<u64>, Box<dyn Error>> {
+pub async fn upload_media(medias: &[(&mime::Mime, &[u8])], auth: &TwitterAuth) -> Result<Vec<u64>> {
     try_join_all(medias.iter().map(|(mime, data)| async {
         match auth {
             TwitterAuth::Dev(token) => {
@@ -68,7 +66,7 @@ pub async fn publish_tweet(
     collection_tweet: CollectionTweet,
     media_ids: &[u64],
     auth: &TwitterAuth,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let should_split_tweet =
         collection_tweet.text.len() + collection_tweet.translated_text.len() + 2 > 280;
     let content = if should_split_tweet {

@@ -1,23 +1,28 @@
+use anyhow::{Context, Result};
 use futures::future::try_join_all;
 use mime_sniffer::MimeTypeSniffer;
-use std::error::Error;
+use rusqlite::Connection;
+use sd_notify::NotifyState;
 use tokio::time::{sleep, Duration};
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::EnvFilter;
 use twitter::{create_dev_token, create_user_token, TwitterAuth};
+
+use crate::state::create_state_table;
 
 mod collection;
 mod images;
-mod redis;
+mod state;
 mod twitter;
 mod twitter_api;
 
 static MEDIA_UPLOAD_SECS: u64 = 60;
 
 async fn run_tweet_iteration(
-    redis_conn: &mut ::redis::Connection,
-    db_conn: &rusqlite::Connection,
+    db_conn: &Connection,
     tw_auth: &TwitterAuth,
     tweet_index: usize,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let next_tweet = collection::get_tweet_from_index(db_conn, tweet_index)?;
 
     let files = try_join_all(
@@ -43,11 +48,11 @@ async fn run_tweet_iteration(
         .map(|(a, b)| (a, b.as_slice()))
         .collect::<Vec<_>>();
 
-    let date = collection::get_new_date_for_tweet(redis_conn, &next_tweet)?;
+    let date = collection::get_new_date_for_tweet(db_conn, &next_tweet)?;
 
     match collection::get_duration_until_tweet(date) {
         duration if !duration.is_zero() => {
-            println!(
+            log::info!(
                 "Next tweet scheduled for {}, waiting for {:.2}h",
                 date,
                 duration.as_secs() as f64 / 3600.0
@@ -62,12 +67,12 @@ async fn run_tweet_iteration(
         }
         _ => {
             // Immediately publish if duration is zero (it is overdue)
-            println!("Publishing missed tweet for {} in 5s...", date);
+            log::warn!("Publishing missed tweet for {} in 5s...", date);
             sleep(Duration::from_secs(5)).await;
         }
     };
 
-    println!(
+    log::info!(
         "Uploading {} medias for tweet {}...",
         medias.len(),
         next_tweet.id
@@ -76,31 +81,46 @@ async fn run_tweet_iteration(
 
     sleep(collection::get_duration_until_tweet(date)).await;
 
-    println!("Publishing tweet {}...", next_tweet.id);
+    log::info!("Publishing tweet {}...", next_tweet.id);
     twitter::publish_tweet(next_tweet, &media_ids, tw_auth).await
 }
 
 #[tokio::main]
-async fn main() {
-    let db_conn = collection::load_collection().expect("Failed to load collection!");
-    let mut redis_conn = redis::connect().expect("Failed to connect to redis!");
-    let tweet_count = collection::get_tweet_count(&db_conn).expect("Failed to get tweet count!");
+async fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .without_time() // systemd logs already include timestamps
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .with_env_var("LOG_LEVEL")
+                .from_env()?,
+        )
+        .init();
+
+    let db_conn = collection::load_collection().context("failed to load collection!")?;
+    create_state_table(&db_conn).context("failed to create state table")?;
+
+    let tweet_count =
+        collection::get_tweet_count(&db_conn).context("failed to get tweet count!")?;
 
     let tw_auth = if std::env::var("TWITTER_USE_USER").is_ok() {
-        TwitterAuth::User(create_user_token().expect("Failed to create twitter user token!"))
+        TwitterAuth::User(create_user_token().context("failed to create twitter user token!")?)
     } else {
-        TwitterAuth::Dev(create_dev_token().expect("Failed to create twitter dev token!"))
+        TwitterAuth::Dev(create_dev_token().context("failed to create twitter dev token!")?)
     };
 
-    loop {
-        let i = redis::get_next_index(&mut redis_conn, tweet_count)
-            .expect("Failed to get next tweet index!");
+    let _ = sd_notify::notify(false, &[NotifyState::Ready]);
 
-        match run_tweet_iteration(&mut redis_conn, &db_conn, &tw_auth, i).await {
-            Ok(_) => {
-                redis::save_tweet_index(&mut redis_conn, i).expect("Failed to save tweet index!")
+    loop {
+        let i = state::get_next_index(&db_conn, tweet_count)
+            .context("failed to get next tweet index!")?;
+
+        match run_tweet_iteration(&db_conn, &tw_auth, i).await {
+            Ok(_) => state::save_tweet_index(&db_conn, i).context("failed to save tweet index!")?,
+            Err(why) => {
+                log::error!("Tweet loop failed for index {i}: {why}");
+                sleep(Duration::from_secs(5)).await;
             }
-            Err(why) => eprintln!("Tweet loop failed for index {}: {}", i, why),
         }
     }
 }

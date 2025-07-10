@@ -1,12 +1,12 @@
 # twitter-collection-bot
 
-A twitter bot for continuously posting a collection of media at exact timestamps
+A twitter bot for continuously posting a collection of media at exact timestamps.
 
 ## Collection
 
 ### Database
 
-The collection should be an sqlite3 database with the following rows
+The collection should be an sqlite3 database with the following rows:
 
 | Column Name | Purpose | Type | Notes |
 | ----------- | ------- | ---- | ----- |
@@ -16,17 +16,19 @@ The collection should be an sqlite3 database with the following rows
 | `translated_text` | Tweet Translated Text | `String` | |
 | `date` | Tweet Date | `u64` | unix timestamp |
 
-### Environment
+### Environment Variables
 
-Set `COLLECTION_PATH` to the path of the sqlite3 database
+Set `DB_PATH` to the path of the sqlite3 database.
 
-Set `IMAGE_DIR_PATH` to the path of the image directory (where file names are contained)
+Set `IMAGE_DIR_PATH` to the path of the image directory (where file names are contained).
+
+Set `COLLECTION_DURATION_YEARS` to the length of the collection in years.
 
 ## Twitter Auth
 
 ### Developer Bot
 
-Provide the following environment variables
+Provide the following environment variables:
 
 ```bash
 TWITTER_CONSUMER_KEY= # api key
@@ -37,7 +39,7 @@ TWITTER_ACCESS_SECRET= # access secret
 
 ### *Experimental* User Bot
 
-Provide the following environment variables
+Provide the following environment variables:
 
 ```bash
 # Set this env variable to use a user account

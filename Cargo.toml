@@ -4,18 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rusqlite = { version = "0.31.0", features = ["bundled"] }
-futures = "0.3.30"
-egg-mode = { git = "https://github.com/MatthewCash/egg-mode", rev = "00194913fbbc5b206a5c2d6db1a3313a8cf4e3b4" }
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+futures = "0.3.31"
+egg-mode = { git = "https://github.com/MatthewCash/egg-mode", rev = "00194913fbbc5b206a5c2d6db1a3313a8cf4e3b4", default-features = false, features = ["rustls"] }
 mime = "0.3.17"
-tokio = { version = "1.36.0", features = ["full"] }
-redis = "0.24.0"
-time = { version = "0.3.34", features = ["macros"] }
-reqwest = { version = "0.11.24", features = ["multipart", "json"] }
-mime-sniffer = "0.1.2"
-serde_json = "1.0.114"
-twitter-v2 = "0.1.8"
-
-[[bin]]
-name = "app"
-path = "src/main.rs"
+tokio = { version = "1.46.1", features = ["full"] }
+time = { version = "0.3.41", features = ["macros"] }
+reqwest = { version = "0.12.12", default-features = false, features = ["http2", "charset", "multipart", "json", "rustls-tls"] }
+mime-sniffer = "0.1.3"
+serde_json = "1.0.140"
+twitter-v2 = { version = "0.1.8", default-features = false, features = ["rustls-tls"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+log = "0.4.27"
+anyhow = "1.0.98"
+sd-notify = "0.4.5"
